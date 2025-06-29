@@ -87,10 +87,17 @@ public class PostService {
         Post postWithTags = postRepository.findByIdWithTags(postId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.POST_NOT_FOUND_EXCEPTION,
                         ErrorCode.POST_NOT_FOUND_EXCEPTION.getMessage() + postId));
-
+        // 이미지 추가
         if (imageFile != null && !imageFile.isEmpty()) {
-            String imageUrl = s3Uploader.upload(imageFile, "post-images");
-            postWithTags.updateImage(imageUrl);
+            // 기존에 있던 이미지 제거
+            String oldImageUrl = postWithTags.getImageUrl();
+            if (oldImageUrl != null) {
+                s3Uploader.deleteUrl(oldImageUrl);
+            }
+            // 새로운 이미지 추가
+            String newimageUrl = s3Uploader.upload(imageFile, "post-images");
+            // 이미지 저장
+            postWithTags.updateImage(newimageUrl);
         }
 
         postWithTags.update(postUpdateRequestDto);
@@ -112,6 +119,12 @@ public class PostService {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.POST_NOT_FOUND_EXCEPTION,
                         ErrorCode.POST_NOT_FOUND_EXCEPTION.getMessage() + postId));
+        // 이미지도 같이 삭제
+        String imageUrl = post.getImageUrl();
+        if (imageUrl != null) {
+            s3Uploader.deleteUrl(imageUrl); // S3에서 이미지 제거
+            post.updateImage(null); // DB에서 URL 제거
+        }
 
         postRepository.delete(post);
     }
@@ -129,4 +142,19 @@ public class PostService {
             postTagRepository.save(postTag);
         }
     }
+
+    // 게시글은 그대로 이미지삭제
+    @Transactional
+    public void postUrlDelete(Long postId) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.POST_NOT_FOUND_EXCEPTION,
+                        ErrorCode.POST_NOT_FOUND_EXCEPTION.getMessage() + postId));
+
+        String imageUrl = post.getImageUrl();
+        if (imageUrl != null) {
+            s3Uploader.deleteUrl(imageUrl); // S3 이미지 삭제
+            post.updateImage(null); // imageUrl null
+        }
+    }
+
 }
